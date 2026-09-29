@@ -181,7 +181,7 @@ adb shell "su -c 'nohup <设备上 frida-server 路径> -l 127.0.0.1:8888 > /dev
 | `device_ui.py` | 设备交互（text/tap/swipe/key/shot/logs/launch/clear/foreground/size） | behavior-analysis |
 | `emu_run.py` / `uniharness.py` | 离线仿真（rev-unicorn-debug）：单函数模拟 / JNI·libc 打桩基座；emu_run 内置观测层（`--watch-code/--watch-regs/--watch-buf/--watch-read/--watch-write/--scan`，超限自动聚合）与 JNI/桩日志（`--log-jni/--trace-stubs/--stub/--dump-jni-out`） | native-analysis |
 | `trace_recon.py` | 仿真 trace 状态重建：观测日志 → 缓冲状态序列（COPY/PASS 自动分段） | native-analysis |
-| `fsmon_run.py` | **设备侧内核文件事件采集与分析**（`capture`/`diff`/`compare`/`summary`；流式、读风暴自动降噪、写活动视图、敏感路径检测画像、落盘件 pull+分类）。不注入/跨进程/无内容（内容走 Frida）；Frida 上不去时的兜底观察 | behavior-analysis |
+| `fsmon_run.py` | **设备侧内核文件事件采集与分析**（`capture`/`diff`/`compare`/`summary`；流式、读风暴自动降噪、写活动视图、敏感路径检测画像、落盘件 pull+分类）。不注入/跨进程/无内容（内容走 Frida）；Frida 上不去时的兜底观察。需 root；设备侧 fsmon 二进制缺件自装（nowsecure/fsmon Release） | behavior-analysis |
 | `cipher_lab.py` | 密码结构判定器：`layers` 层写法双轨迹判定 / `table` 白盒表反推 / `schedule` 编排归因（出主密钥） | native-analysis |
 
 ### templates/ + checklist/

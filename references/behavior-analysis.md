@@ -1,7 +1,7 @@
 # 行为分析（Behavior Analysis）
 
-> 何时读：用户提到"看网络请求/抓包/还原协议/行为摸底/全程监控/污点追踪/内存扫描/Intent/Serializable"时读取。
-> 由 SKILL.md 任务路由表指向，按需读取。相关模块在 `scripts/monitors/`。
+> 何时读：用户提到"看网络请求/抓包/还原协议/行为摸底/全程监控/污点追踪/内存扫描/Intent/Serializable/文件落地/内核视角/谁写的"时读取。
+> 由 SKILL.md 任务路由表指向，按需读取。相关模块在 `scripts/monitors/`；内核文件事件工具 `tools/fsmon_run.py`。
 
 ---
 
@@ -114,6 +114,7 @@ Step 2: 组合攻击链验证
 | network_monitor `sendto(密文,256)` + syscall_tracer `write(fd,256)` 同线程同时 | 加密/发送函数 | <2ms |
 | intent_tracker `ExportedActivity → WebViewActivity` + file_monitor `openat .../secret.db` | 跨组件攻击链 | <500ms |
 | intent_tracker extras 含 `Serializable` + file_monitor 读到私有文件 | 反序列化攻击链 | intent_tracker 先于 file_monitor |
+| fsmon 写事件 + file_monitor 无对应记录 | 绕过 libc / 跨进程写入（启发式线索，见 §五 diff） | 同窗 |
 
 ### 4.6 反向推断：用缺失信号做排除
 
@@ -129,7 +130,26 @@ Step 2: 组合攻击链验证
 
 ---
 
-## 五、设备交互（`tools/device_ui.py`）
+## 五、内核文件事件（`tools/fsmon_run.py`）
+
+不注入、跨进程的文件行为基线：内核层事件（路径/uid/类型；`-P/-p` 时带 pid/proc），**只有事件没有内容**。适用：内联 svc 绕过 libc 的访问（`file_monitor.js` 抓不到）、子进程/独立进程归属、运行期落盘件（壳释放 dex/so、二次载荷、离线包）。
+
+前置：设备 root + fsmon 二进制（缺件自装：nowsecure/fsmon Release 取 arm64 → push `/data/local/tmp/fsmon-android-arm64`；`--fsmon-path` 覆盖）。
+
+```bash
+python3 tools/fsmon_run.py capture --pkg com.app --duration 30 --launch           # 默认监听 data 目录×3；--watch DIR 追加
+python3 tools/fsmon_run.py capture --pkg com.app --profile detect --proc com.app  # 追加检测类路径（/data/local/tmp、su、magisk）+ 进程归属
+python3 tools/fsmon_run.py capture --pkg com.app --pull                           # 落盘件选择性 pull + 类型识别（dex/elf/sqlite/zip）
+python3 tools/fsmon_run.py summary --log <采集日志>                                # 离线重算摘要（不连设备）
+python3 tools/fsmon_run.py diff --fsmon-log <采集日志> --frida-log <file_monitor 日志>  # 内核 vs libc 对账（差集）
+python3 tools/fsmon_run.py compare --base A.summary.json --new B.summary.json     # 两次运行写路径对比
+```
+
+判读（`SUMMARY <json>` 一行）：`writes`=写活动视图（谁写了什么/次数/时序）；`sensitive`=检测类路径画像；`read_storms`=读风暴（libc 视角看不见的高频读）；`warnings`=已知限制（inotify 新建目录盲区等）。日常顺序：**fsmon 侦察拿骨架 → Frida 取内容**；对账是启发式线索（窗口不齐、路径读取污染），不是证明。
+
+---
+
+## 六、设备交互（`tools/device_ui.py`）
 
 常用动作：`text`（空格自动转 `%s`；`--replace` 先清空）、`clear`、`tap --text/--id`、`wait-for`、`launch`、`shot`、`logs`、`stayon`/`wake`。
 
@@ -146,4 +166,5 @@ Step 2: 组合攻击链验证
 | 子进程监控 | `utils + proc_monitor` |
 | 跨组件污点追踪 | `utils + intent_tracker` |
 | 完整攻击链 | `utils + intent_tracker + file_monitor + network_monitor` |
+| 文件落地/内核视角 | `python3 tools/fsmon_run.py capture --pkg <包> [--pull]`（内核事件骨架；内容再走 Frida） |
 | 全量覆盖 | `utils + file + thread + network + syscall + dl + proc + crypto`（日志量大） |

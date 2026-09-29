@@ -30,7 +30,7 @@ Just **describe your need in one sentence** — the AI follows the decision tree
 | 🎯 **Unpacking** | "Unpack this app for me" | Multiple methods by scenario: one-command Frida unpacking (restore/fix/dedupe/method-body marking), or in-memory DEX dump (panda + mem dumpers, ptrace-free, stealthier under anti-debugging) |
 | 🔐 **Crypto analysis** | "Find this app's crypto algorithm and keys" | Java + Native dual-layer crypto auto-dump: algorithm/key/IV/plaintext; signature / custom / obfuscated algorithms are also recovered and replayable offline |
 | 🛡️ **Anti-detection bypass** | "Frida crashes on attach, bypass it" | 6-phase pipeline: locate detection SO → hook init_array → keep alive → NOP crash functions |
-| 🔍 **Behavior profiling** | "What is this app doing in secret?" | File/network/thread/process/Intent monitoring, behavior profile output |
+| 🔍 **Behavior profiling** | "What is this app doing in secret?" | File/network/thread/process/Intent monitoring + kernel file-event view (no injection, Frida-free, "who touched what file"), behavior profile output |
 | 🧩 **Dex2C/VMP analysis** | "This crypto is native, analyze the logic" | Locate `so+offset`, hook-first / unidbg replay / Ghidra pseudocode |
 | 🧬 **Static attack surface** | "Audit this app's attack surface" | Enumerate exported components/Provider/WebView from Manifest, source→sink tracking |
 | 🧪 **Security compliance** | "Check this app's security compliance" | Auto-run compliance checks (injection/debug/WebView SSL/metadata), report results |
@@ -47,7 +47,7 @@ A **complete RE agent skill system**, not a script collection:
 
 - 🧠 **Agent brain** (`.kilo/agent/reverser.md`) — RE role definition, auto-selects modules via the decision tree
 - 📚 **Domain knowledge** (`references/` project wiki + `.kilo/skill/`) — 9 technique domain manuals (full index in `_index.md`) + dynamic analysis control + native deep-dive capabilities (symbol/struct recovery, offline emulation, in-memory DEX dump)
-- 🔧 **Capability units** (`scripts/`) — 24 Frida modules (monitors 15 + bypass 9) + 21 standalone tools + checklists
+- 🔧 **Capability units** (`scripts/`) — 24 Frida modules (monitors 15 + bypass 9) + 22 standalone tools + checklists
 - 🛠️ **Compliance detection** — injection, debugging, WebView SSL, APK metadata/signature
 - 🔌 **MCP integration** (`kilo.json`) — jadx-mcp (Java decompile) + ghidra-mcp (binary analysis)
 
@@ -80,7 +80,7 @@ A **complete RE agent skill system**, not a script collection:
 ├────────────────────────────────────────────────────────────┤
 │               Standalone Tools (tools/ at repo root)        │
 │  so.py · unpack · dex_* · frida_run · device_ui             │
-│  emu_run · trace_recon · cipher_lab · fix_elf · det         │
+│  emu_run · trace_recon · cipher_lab · fsmon_run · det       │
 ├────────────────────────────────────────────────────────────┤
 │               MCP Integration (kilo.json)                   │
 │  jadx-mcp  — AI reads Java source directly                  │
@@ -144,6 +144,7 @@ MobileRE-Skill/
 │   ├── device_ui.py                 # Device UI (elements/tap/text/shot)
 │   ├── emu_run.py / uniharness.py   # Unicorn offline emulation (--watch-* observability)
 │   ├── trace_recon.py / cipher_lab.py  # log -> state reconstruction / cipher structure adjudication
+│   ├── fsmon_run.py                 # Device-side kernel file-event capture/analysis (fsmon inotify backend; artifact pull)
 │   ├── check-anti-inject.bat / check-janus.bat / debug-gdb.py / janus_check.py  # Detection
 │   └── hap_parser.py                # HAP (HarmonyOS) package info parser
 ├── feedback/FEEDBACK.md            # Agent-level feedback loop (local only, not committed)
@@ -209,7 +210,12 @@ adb shell "chmod 755 /data/local/tmp/AndKittyInjector"
 # 3. Push gdbserver64 (for debug detection)
 adb push gdbserver64 /data/local/tmp/gdbserver64
 adb shell "chmod 755 /data/local/tmp/gdbserver64"
+
+# 4. fsmon (device-side dependency of tools/fsmon_run.py; the AI downloads the arm64 prebuilt and pushes it when missing)
+#    https://github.com/nowsecure/fsmon/releases
 ```
+
+`fsmon_run.py` and the detection checks run as root (`su -c`); fsmon default path `/data/local/tmp/fsmon-android-arm64` (override with `--fsmon-path`).
 
 ---
 

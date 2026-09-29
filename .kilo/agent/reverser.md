@@ -105,6 +105,7 @@ description: 逆向分析自动化助手 — 攻击面枚举 → 静态逆向(JA
 | ghidra MCP | Python bridge，支持反编译+调试 |
 | 设备 ID | 以 `adb devices` 实际序列号为准（arm64-v8a，USB 直连用 `-U`，多设备用 `-D <serial>`） |
 | frida-server | 用户自行管理，命名为 `fuckserver`，启动端口一般设置为8888，Agent 不负责推送/重启，注意转发端口要用-H |
+| fsmon | 设备侧 `/data/local/tmp/fsmon-android-arm64`（MIT，nowsecure/fsmon）；未装 → 自行从 Release 取 arm64 预编译 push+chmod 755，装好更新本行 |
 
 ## 项目目录管理
 

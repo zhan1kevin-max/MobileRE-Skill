@@ -30,7 +30,7 @@
 | 🎯 **加固脱壳** | "帮我脱壳这个 App" | 多种方式按场景选择：一键脱壳（默认回填/修复/去重/方法体标记）；或内存 DEX dump（panda/mem 双 dumper，ptrace-free，反调试下更隐蔽） |
 | 🔐 **加密分析** | "看下这个 App 的加密算法和密钥" | Java + Native 双层加解密自吐：算法/密钥/IV/明文；签名/自研/魔改算法也能还原并离线复算 |
 | 🛡️ **反检测绕过** | "挂上 Frida 就闪退，帮我绕过" | 6 阶段 Pipeline：定位检测 SO → 抢 init_array → 保活 → NOP 闪退函数 |
-| 🔍 **行为摸底** | "这个 App 偷偷干了什么" | 文件/网络/线程/进程/Intent 全程监控，输出行为画像 |
+| 🔍 **行为摸底** | "这个 App 偷偷干了什么" | 文件/网络/线程/进程/Intent 全程监控 + 内核文件事件视角（不注入、免 Frida，看"谁碰了什么文件"），输出行为画像 |
 | 🧩 **Dex2C/VMP 分析** | "这个加密是 native 的，帮我分析逻辑" | 定位 `so+offset`，hook 优先 / unidbg 复现 / Ghidra 伪代码 |
 | 🧬 **静态攻击面** | "帮我审计这个 App 的攻击面" | 从 Manifest 枚举 exported 组件/Provider/WebView，source→sink 追踪 |
 | 🧪 **安全合规测试** | "帮我检查这个 App 的安全合规" | 自动运行合规检测（注入/调试/WebView SSL/元数据），出具结果 |
@@ -47,7 +47,7 @@
 
 - 🧠 **Agent 大脑**（`.kilo/agent/reverser.md`）— 逆向分析角色定义，按决策树自动选模块
 - 📚 **领域知识**（`references/` 项目级 wiki + `.kilo/skill/`）— 9 大技巧域手册（全量索引 `_index.md`）+ 动态分析总控 + Native 深度能力（符号/结构恢复、离线模拟执行、内存 DEX 脱壳）
-- 🔧 **能力单元**（`scripts/`）— 24 个 Frida 模块（monitors 15 + bypass 9）+ 21 个独立工具 + 检测清单
+- 🔧 **能力单元**（`scripts/`）— 24 个 Frida 模块（monitors 15 + bypass 9）+ 22 个独立工具 + 检测清单
 - 🛠️ **合规检测** — 注入、调试、WebView SSL、APK 元数据/签名
 - 🔌 **MCP 集成**（`kilo.json`）— jadx-mcp（Java 反编译）+ ghidra-mcp（二进制分析）
 
@@ -80,7 +80,7 @@
 ├────────────────────────────────────────────────────────────┤
 │               独立工具（项目根 tools/）                      │
 │  so.py · unpack · dex_* · frida_run · device_ui             │
-│  emu_run · trace_recon · cipher_lab · fix_elf · 检测        │
+│  emu_run · trace_recon · cipher_lab · fsmon_run · 检测      │
 ├────────────────────────────────────────────────────────────┤
 │               MCP 集成（kilo.json 配置）                    │
 │  jadx-mcp  — AI 直接读 Java 源码反编译                      │
@@ -144,6 +144,7 @@ MobileRE-Skill/
 │   ├── device_ui.py                 # 设备交互（元素树/点击/输入/截图）
 │   ├── emu_run.py / uniharness.py   # Unicorn 离线仿真（含 --watch-* 观测层）
 │   ├── trace_recon.py / cipher_lab.py  # 观测日志→状态重建 / 密码结构判定（层/表/编排）
+│   ├── fsmon_run.py                 # 设备侧内核文件事件采集与分析（fsmon inotify 后端；落盘件 pull）
 │   ├── check-anti-inject.bat / check-janus.bat / debug-gdb.py / janus_check.py  # 检测项
 │   └── hap_parser.py                # HAP（鸿蒙）包信息解析
 ├── feedback/FEEDBACK.md            # agent 级反馈闭环（本地保留，不入库）
@@ -209,7 +210,12 @@ adb shell "chmod 755 /data/local/tmp/AndKittyInjector"
 # 3. 推送 gdbserver64（调试检测用）
 adb push gdbserver64 /data/local/tmp/gdbserver64
 adb shell "chmod 755 /data/local/tmp/gdbserver64"
+
+# 4. fsmon（内核文件事件采集，tools/fsmon_run.py 的设备侧依赖；缺件时 AI 自行下载 arm64 预编译并推送）
+#    https://github.com/nowsecure/fsmon/releases
 ```
+
+`fsmon_run.py` 与检测项均以 root（`su -c`）运行；fsmon 默认路径 `/data/local/tmp/fsmon-android-arm64`（`--fsmon-path` 覆盖）。
 
 ---
 

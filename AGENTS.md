@@ -47,6 +47,7 @@ MobileRE-Skill/                    ← 工作目录（项目根）
 │   ├── so.py                        SO 静态分析（ELF 侦察/字符串/反汇编/交叉引用/SVC/JNI 判型）
 │   ├── unpack.py / dex_*.py         脱壳与 DEX 处理
 │   ├── frida_run.py / device_ui.py   非交互 Frida 运行 / 设备交互
+│   ├── fsmon_run.py                  设备侧内核文件事件采集（设备侧 fsmon 二进制，缺件自装）
 │   ├── emu_run.py / uniharness.py   离线仿真（rev-unicorn-debug）
 │   └── check-*.bat / debug-gdb.py / janus_check.py   检测项（注入/调试/Janus）
 ├── <包名>/                         ← 每个 App 的分析产物（不入库）
