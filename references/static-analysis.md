@@ -1,6 +1,6 @@
 # 静态分析（jadx-mcp 攻击面）
 
-> 何时读：用户提到"分析这个类/攻击面/序列化/反序列化/WebView/深链/Provider/Intent-filter"时读取。
+> 何时读：用户提到"分析这个类/攻击面/序列化/反序列化/WebView/深链/Provider/Intent-filter/AIDL/Binder/Service"时读取。
 > 由 SKILL.md 任务路由表指向，按需读取。使用 jadx MCP 工具（`jadx_*`）。
 
 ---
@@ -9,12 +9,12 @@
 
 **攻击面优先，hook 在后。** 先枚举所有外部可控入口，再决定 hook 什么。
 
-### 1.1 入口枚举（从 AndroidManifest 出发）
+### 1.1 入口枚举（ingress：从 AndroidManifest 出发）
 
 | 入口 | 检查项 | 工具 |
 |------|--------|------|
 | Exported Activity | 是否有 intent-filter、是否 `<android:exported="true">`、是否需权限 | `jadx_get_android_manifest` |
-| Exported Service | 能否被外部 startService | 同上 |
+| Exported Service | ① 能否被外部 `startService`（Intent 型）；② **能否 `bindService` + 调用 AIDL/Messenger 方法**（Binder 型，见 §1.5） | 同上 |
 | Broadcast Receiver | 隐式 Intent 能否触发 | 同上 |
 | Content Provider | 读写权限、path traversal、FileProvider | 同上 |
 | Deep Link | scheme/host 配置、Intent Redirection | 搜索 intent-filter |
@@ -26,8 +26,27 @@
 ```
 Source（外部输入：Intent extras、URI 参数、文件路径、网络请求）
   → Path（经过的代码路径）
-  → Sink（危险操作：startActivity、loadUrl、File.write、rawQuery、exec）
+  → Sink（危险操作，见下表）
 ```
+
+**Sink 全表**（按危险操作分类）：
+
+| 类 | Sink | 典型漏洞 |
+|----|------|---------|
+| **执行** | `startActivity`/`startService`/`sendBroadcast`（入参 Intent） | Intent 重定向（§1.4） |
+| | `Runtime.exec`/`ProcessBuilder`（拼接参数） | 命令注入 |
+| | `System.load`/`System.loadLibrary`/`dlopen`（动态路径） | native 加载 ACE |
+| | `DexClassLoader`/`Class.forName(字段).newInstance()` | 动态加载 / 反序列化 ACE |
+| **数据** | `File`/`FileOutputStream`/`FileWriter`（拼接路径） | 路径遍历 / 任意写 |
+| | `execSQL`/`rawQuery`（拼接） | SQL 注入 |
+| | `openInputStream`/`query`（URI 入参） | Provider 代理 / 文件窃取 |
+| **页面** | `loadUrl`/`loadData`/`addJavascriptInterface` | WebView 注入 / JS Bridge |
+| **IPC** | `bindService`/`transact`/`Messenger.send` | Binder 接口暴露（§1.5） |
+| | `PendingIntent.get*` + `send`（fillIn） | PI 劫持（§1.4） |
+| | `grantUriPermission`（目标可控） | 授权外泄（§1.4） |
+| **网络** | `HttpURLConnection`/`OkHttp`（URL 入参） | SSRF |
+| | `loadUrl(intent://)` | Intent 重定向（§1.4） |
+| **日志** | `Log.[dviwe]`（敏感字段） | 日志泄漏（系统应用读者） |
 
 - 模式匹配看代码行，污点分析追完整攻击路径
 - 跨组件跟踪：数据流经 Activity → Intent → Service/Receiver/Provider，多数工具在组件边界失明，需人工追踪
@@ -37,6 +56,63 @@ Source（外部输入：Intent extras、URI 参数、文件路径、网络请求
 
 - 跨 App 共享 UID、隐式 Intent 劫持、权限继承、预装系统 App 的特权链路都是入口
 - SDK 继承宿主信任边界：攻击面 = SDK 代码 + 宿主代码，SAST 必须分析编译产物而非源码
+
+### 1.4 出口审计（egress：能力/身份外泄）
+
+攻击面不只有"入口"。**互补的另一半是"出口"——我把自身的身份、权限、URI 授权交给了谁。** 这类问题 Manifest 不声明（§1.1 枚举看不见），只在代码层：**创建/授权点 + 流向**。
+
+| 家族 | 机理 | 检测点 |
+|------|------|--------|
+| **PendingIntent 劫持** | 可变(mutable)+隐式(无组件)+交给外部 → 接收方 fillIn 组件，以属主身份启动任意组件 | `PendingIntent.get*` 创建点 → flags 含 `FLAG_MUTABLE`(0x2000000)/无 flag？→ 基 Intent 有 `setComponent/setClass/setPackage`？→ 是否出进程（Binder 返回/入参、Notification、Alarm） |
+| **grantUriPermission** | 把文件/Provider 权限授予攻击者指定包 | `grantUriPermission(pkg=入参,…)` 目标可控？ |
+| **Provider 代理** | 特权方拿调用者给的 URI，以自身 UID 查询 → 绕过调用者缺失权限 | `query/openInputStream(uriFromParam,…)` |
+| **Intent 重定向** | 入参 Intent 被转发 `startActivity`（可借受害者 UID 拉起非导出组件） | `startActivity(字段)` / `getParcelableExtra("android.intent.extra.INTENT")` 数据流 |
+| **隐式解析劫持** | PI/广播基 Action 被恶意组件抢注 | 通知 PI + 可抢注 action |
+
+- 判定：egress 漏洞的**起点是"创建/授权点"，不是组件声明**——所以必须离开 Manifest、进代码。
+- 动态侧：hook `PendingIntent.get*`（打 flags+baseIntent.getComponent()）、`PendingIntent.send`（打最终组件）、`grantUriPermission`。
+
+### 1.5 Binder 攻击面（AIDL / Messenger）
+
+> §1.1 只看得到"service 是否导出"；能调到什么在代码层。三层合取才构成漏洞：
+
+| 层 | 查什么 | 手段 |
+|----|--------|------|
+| ① 可达性 | service 导出？有 permission？ | Manifest / `drozer app.service.info` |
+| ② 鉴权 | 方法内有无 `sendingUid`/`getCallingUid`/`checkCallingPermission` 校验？ | 读 `onBind` 返回接口的实现 |
+| ③ 实质逻辑 | 被调到的那个实现有无敏感操作？ | 读实现体 |
+
+**基类/子类陷阱**：`exported="true"` 常指向 SDK 基类（回调空实现）；有逻辑的子类常 `exported=false`（默认）。必须核对 manifest 里声明的是哪一个。
+
+**两种 Binder 形态**：
+
+| 形态 | `onBind` 返回 | 驱动方式 | 判定特征 |
+|------|--------------|---------|---------|
+| **AIDL** | `IXxx.Stub` | `asInterface()` + 方法调用 | 源码有 `.aidl` / `IXxx extends IInterface` |
+| **Messenger** | `Messenger.getBinder()` | `Message(what, obj)` | `new Messenger(handler)` / `handleMessage` |
+
+**验证工具分工**：
+
+| 层 | 工具 | 要点 |
+|----|------|------|
+| **App 层**（普通应用自己的 Service） | 自建探针 `mode=bind_messenger` | `am` / `service call` / `drozer` 都够不到；`am` 只有 startService |
+| **Framework 层**（系统服务） | `service list`；`service call <svc> <code> [i32 N\|i64 N\|s16 STR]` | 调用者是 shell(uid 2000)，持有大量 signature 权限；"能调"≠"零权限 app 能利用"，定案用 AIDL `@EnforcePermission` 注解或普通 App 复核 |
+
+**判定要点**：
+
+| 情形 | 结论 |
+|------|------|
+| ① 可达 + ② 无鉴权 + ③ 有敏感操作 | 漏洞 |
+| ② 有鉴权（`sendingUid`/`getCallingUid`/`checkCallingPermission`） | 不可利用 |
+| ③ 落空（导出的基类空实现，有逻辑的子类未导出） | 不可利用 |
+| ① 不成立（未导出） | 不可达 |
+
+**探针命令**：
+```bash
+adb shell am start -n re.probe/.AttackActivity -a re.probe.ACTION_ATTACK \
+  --es mode bind_messenger --es target_pkg <pkg> --es target_class <service> \
+  --es payload_action <int> --es payload_key <k> --es payload_value <v>
+```
 
 ---
 

@@ -230,7 +230,6 @@ FP.patchBatch([
 
 ### 模式 4: init_array SVC 直接退出
 
-- **来源**: sunlife APP 实战分析
 - **症状**: `exit_blocker` 无任何 BLOCKED 日志，进程直接消失
 - **检测原理**: 在 init_array 中使用 `svc #0` 内联汇编直接调用 `exit_group`，完全绕过 libc
 - **绕过方案**:

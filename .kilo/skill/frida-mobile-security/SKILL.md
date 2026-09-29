@@ -74,7 +74,7 @@ adb shell "su -c 'nohup <设备上 frida-server 路径> -l 127.0.0.1:8888 > /dev
 | "绕过检测" "过掉反调试" "挂上就闪退" "防注入" "加固壳" "SVC" "TracerPid" "GDB" | 环境对抗 | `references/anti-detection.md` |
 | "脱壳" "加固解密" "提取 dex" "so 提取" | 脱壳 | `references/unpacking.md`（**默认 `tools/unpack.py` 一键跑；深挖/异常才用底层脚本**） |
 | "加密明文" "算法" "密钥" "AES" "hook 方法" "修改参数" "伪造返回值" "SSL 证书" "TrustManager" "onReceivedSslError" | 加密/功能 hook | `references/crypto-hook.md` |
-| "看网络请求" "抓包" "还原协议" "行为摸底" "全程监控" "污点追踪" "内存扫描" "Intent" "Serializable" | 行为分析 | `references/behavior-analysis.md` |
+| "看网络请求" "抓包" "还原协议" "行为摸底" "全程监控" "污点追踪" "内存扫描" "Intent" "Serializable" "文件落地" "内核视角" "谁写的" | 行为分析 | `references/behavior-analysis.md` |
 | "分析这个类" "攻击面" "序列化" "WebView" "深链" "Provider" "反序列化" | 静态分析 | `references/static-analysis.md` |
 | "分析这个 so" "native 函数" "so 里的加密" "字符串引用" "交叉引用" "逆向 so" "找不到导出" | SO 层分析 | `references/native-analysis.md` |
 | "模块无输出" "闪退" "ANR" "hook 不生效" "报错" | 故障诊断 | `references/troubleshooting.md` |
@@ -181,6 +181,7 @@ adb shell "su -c 'nohup <设备上 frida-server 路径> -l 127.0.0.1:8888 > /dev
 | `device_ui.py` | 设备交互（text/tap/swipe/key/shot/logs/launch/clear/foreground/size） | behavior-analysis |
 | `emu_run.py` / `uniharness.py` | 离线仿真（rev-unicorn-debug）：单函数模拟 / JNI·libc 打桩基座；emu_run 内置观测层（`--watch-code/--watch-regs/--watch-buf/--watch-read/--watch-write/--scan`，超限自动聚合）与 JNI/桩日志（`--log-jni/--trace-stubs/--stub/--dump-jni-out`） | native-analysis |
 | `trace_recon.py` | 仿真 trace 状态重建：观测日志 → 缓冲状态序列（COPY/PASS 自动分段） | native-analysis |
+| `fsmon_run.py` | **设备侧内核文件事件采集与分析**（`capture`/`diff`/`compare`/`summary`；流式、读风暴自动降噪、写活动视图、敏感路径检测画像、落盘件 pull+分类）。不注入/跨进程/无内容（内容走 Frida）；Frida 上不去时的兜底观察 | behavior-analysis |
 | `cipher_lab.py` | 密码结构判定器：`layers` 层写法双轨迹判定 / `table` 白盒表反推 / `schedule` 编排归因（出主密钥） | native-analysis |
 
 ### templates/ + checklist/
