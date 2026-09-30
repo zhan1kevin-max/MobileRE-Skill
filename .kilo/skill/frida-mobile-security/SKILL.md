@@ -72,7 +72,7 @@ adb shell "su -c 'nohup <设备上 frida-server 路径> -l 127.0.0.1:8888 > /dev
 | 意图关键词 | 手法域名 | 加载 |
 |-----------|---------|------|
 | "绕过检测" "过掉反调试" "挂上就闪退" "防注入" "加固壳" "SVC" "TracerPid" "GDB" | 环境对抗 | `references/anti-detection.md` |
-| "脱壳" "加固解密" "提取 dex" "so 提取" | 脱壳 | `references/unpacking.md`（**默认 `tools/unpack.py` 一键跑；深挖/异常才用底层脚本**） |
+| "脱壳" "加固解密" "提取 dex" "so 提取" | 脱壳 | `references/unpacking.md`（**先分诊：无壳直接解包；有壳先 root 内存 dump；需回填再上 `tools/unpack.py`**） |
 | "加密明文" "算法" "密钥" "AES" "hook 方法" "修改参数" "伪造返回值" "SSL 证书" "TrustManager" "onReceivedSslError" | 加密/功能 hook | `references/crypto-hook.md` |
 | "看网络请求" "抓包" "还原协议" "行为摸底" "全程监控" "污点追踪" "内存扫描" "Intent" "Serializable" "文件落地" "内核视角" "谁写的" | 行为分析 | `references/behavior-analysis.md` |
 | "分析这个类" "攻击面" "序列化" "WebView" "深链" "Provider" "反序列化" | 静态分析 | `references/static-analysis.md` |
@@ -171,7 +171,7 @@ adb shell "su -c 'nohup <设备上 frida-server 路径> -l 127.0.0.1:8888 > /dev
 
 | 工具 | 用途 | 归属 |
 |------|------|------|
-| `unpack.py` | **脱壳一键入口**（线性流水线：回填+补充+自动pull+fix-checksum+去重+方法体标记） | unpacking |
+| `unpack.py` | 脱壳**升级项**（Frida 回填：loadClass+补充+自动pull+fix-checksum+去重+方法体标记）；仅在 root 内存 dump 拿不到完整方法体时用 | unpacking |
 | `dex_rebuilder.py` | ① `--fix-checksum` 重算 checksum（默认操作）② CodeItem 离线重组回填 | unpacking |
 | `dex_dedupe.py` | 产物去重/校验 | unpacking |
 | `fix_elf.py` | 修复 ELF header | unpacking |

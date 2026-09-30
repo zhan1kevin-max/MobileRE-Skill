@@ -5,9 +5,33 @@
 
 ---
 
-## 一键脱壳（默认工作流）
+## 脱壳策略：先分诊，成本递增（默认决策）
 
-**大多数场景直接跑 `unpack.py`，一条命令，线性自动完成，无需 AI 决策：**
+**别一上来就跑 Frida。** 顺序：分诊 → 最轻工具 → 逐级升级。
+
+### Step 0 分诊（先花 5 分钟，决定后面怎么走）
+1. **有没有壳**：Application 类（`com.stub.StubApp` / `StubShell`…）、lib 目录壳 SO、DEX 内壳字符串、assets 次级载荷。
+2. **DEX 形态**：APK 内 DEX 的 `class_defs` 与方法体统计（coded / native / return-void）。
+3. 判定：
+   - **无壳**（明文 DEX + 方法体完整 + 无壳特征）→ 直接 `unzip` 提取 DEX，**到此为止**，不进任何 dump 流水线。
+   - **有壳** → 进 Step 1。
+
+### Step 1 root 内存 dump（非 Frida，优先）
+`panda-dex-dumper` / `mem-dex-dumper`（skill `rev-dex-dumper`），只读 `/proc/<pid>/mem`，不注入、不 ptrace，对 Frida 检测隐身；panda 用 SIGSTOP 冻结快照，mem 用 `-b mem`/`-b vmreadv` 双后端交叉校验。
+- 覆盖：一代壳（整体加密）；二代壳已回填部分。
+- **门禁自检**：读不到目标 `/proc/<pid>/maps` 时，先**对照另一个 App**——只有目标读不到才怀疑其 `PR_SET_DUMPABLE=0`（转 Step 2）；都读不到则是环境/权限问题。注意 `maps` 属主 `root:root` 在 Magisk/hidepid 设备上是全局现象，**不能**据此判定。
+- 地址归属：命中后回查 `/proc/<pid>/maps`，`/data/app/.../base.apk` = 业务 DEX，`/system/framework/*.jar`、`/apex/*/javalib/*.jar` = 系统噪音。
+
+### Step 2 Frida 脱壳（升级项，仅在需要时）
+`unpack.py`（codeitem_dump whole + dex_finder），spawn 注入 + `loadClass` 回填。
+- **只在 Step 1 拿不到完整方法体（抽取壳未回填、需 loadClass 触发）时用**；三代 Dex2C/VMP 也走这里看 native 占比。
+- 代价：触发反注入检测、留 Frida 痕迹、慢、可能影响目标。
+
+---
+
+## Step 2 细节：`unpack.py` 一键流程（需 Frida 升级时）
+
+**需要回填时，一条命令，线性自动完成，无需逐项决策：**
 
 ```bash
 python3 tools/unpack.py <包名> [--out 输出目录] [--wait 120]
